@@ -1,7 +1,8 @@
 import streamlit as st 
 from datetime import date 
+import pandas as pd
 from config import CURRENCY_SYMBOLS, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TRANSACTION_TYPES
-from database.db_manager import init_db,add_transaction, load_transactions_df, delete_transaction,preload_seed_data 
+from database.db_manager import init_db,add_transaction, load_transactions_df,delete_transaction,preload_seed_data,update_transaction 
 
 st.set_page_config(
     page_title='Finance Tracker',
@@ -61,3 +62,28 @@ with col_data:
                 delete_transaction(int(del_id))
                 st.warning(f'Deleted Transaction #{int(del_id)}')
                 st.rerun()
+st.markdown('---')
+st.title("Edit transaction 🖋️") 
+edit_id=st.number_input("enter the transaction:",min_value=1,step=1,key='edit_id') 
+if edit_id:
+    existing=df[df['id']==edit_id]
+    if not existing.empty:
+        row=existing.iloc[0] 
+        with st.form('Edit Transaction',clear_on_submit=True):
+            new_date=st.date_input("Date",value=pd.to_datetime(row["date"]))
+            new_type=st.radio('Type',TRANSACTION_TYPES,index=TRANSACTION_TYPES.index(row['type']),horizontal=True)
+            new_category=st.selectbox('Categories',EXPENSE_CATEGORIES if new_type=='Expense' else INCOME_CATEGORIES)
+            new_amount=st.number_input('Amount(₹)',min_value=0.01,value=float(row['amount']))
+            new_note=st.text_input('Note',value=str(row['note']))
+            update_btn=st.form_submit_button('Update transaction🗳️')
+            if update_btn:
+                update_transaction(edit_id,new_date,new_amount,new_category,new_type,new_note)
+                st.session_state['msg']=f'Transaction #{edit_id} updated!'
+                st.rerun() 
+        if "msg" in st.session_state:
+            st.success(st.session_state["msg"])
+            del st.session_state["msg"] 
+    else:
+        st.warning(f'No transaction found with #{edit_id}')
+                
+                  

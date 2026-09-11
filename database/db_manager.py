@@ -59,4 +59,14 @@ def preload_seed_data():
             print(f"Loaded {len(seed_df)} seed transactions")
         except FileNotFoundError:
             print("Seed file is not found.Starting with empty database.")
+            
+def update_transaction(id,date,amount,category,tx_type,note):
+    conn=get_connection()
+    cursor=conn.cursor()
+    cursor.execute(
+        """UPDATE transactions set date=?,amount=?,category=?,type=?,note=? where id=?""",
+        (str(date),float(amount),category,tx_type,note,id)
+    )
+    conn.commit()
+    conn.close()
         
