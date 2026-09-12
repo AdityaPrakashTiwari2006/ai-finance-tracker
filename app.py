@@ -19,7 +19,7 @@ st.title('💰 Personal Finance Tracker')
 df=load_transactions_df()
 if not df.empty:
     kpis=calculate_kpis(df)
-    m1,m2,m3,m4=st.columns(4)
+    m1,m2,m3,m4=st.columns(4,border=True)
     m1.metric('Total Income', f"{CURRENCY_SYMBOLS}{kpis['total_income']:,.0f}")
     m2.metric('Total Expense', f"{CURRENCY_SYMBOLS}{kpis['total_expenses']:,.0f}")
     m3.metric('Net Saving', f"{CURRENCY_SYMBOLS}{kpis['net_savings']:,.0f}")
@@ -96,4 +96,4 @@ if edit_id:
             st.success(st.session_state["msg"])
             del st.session_state["msg"] 
     else:
-        st.warning(f'No transaction found with #{edit_id}')
+        st.warning(f'No transaction found with #{edit_id}')
