@@ -26,7 +26,7 @@ if not df.empty:
     m4.metric('Saving Rate', f"{kpis['savings_rate']:,.1f}%")
     st.markdown("---")
 
-col_form,col_data=st.columns([1,2])
+col_form,col_data=st.columns([1,2],border=True)
 
 
 with col_form:
