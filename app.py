@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import date 
 import pandas as pd
 from config import CURRENCY_SYMBOLS, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TRANSACTION_TYPES
+from modules.analytics import calculate_kpis
 from database.db_manager import init_db,add_transaction, load_transactions_df,delete_transaction,preload_seed_data,update_transaction 
 
 st.set_page_config(
@@ -85,5 +86,14 @@ if edit_id:
             del st.session_state["msg"] 
     else:
         st.warning(f'No transaction found with #{edit_id}')
+df=load_transactions_df()
+if not df.empty:
+    kpis=calculate_kpis(df)
+    m1,m2,m3,m4=st.columns(4)
+    m1.metric('Total Income', f"{CURRENCY_SYMBOLS}{kpis['total_income']:,.0f}")
+    m2.metric('Total Expense', f"{CURRENCY_SYMBOLS}{kpis['total_expenses']:,.0f}")
+    m3.metric('Net Saving', f"{CURRENCY_SYMBOLS}{kpis['net_savings']:,.0f}")
+    m4.metric('Saving Rate', f"{kpis['savings_rate']:,.1f}%")
+    
                 
                   
