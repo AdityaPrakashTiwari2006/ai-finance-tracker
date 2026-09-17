@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import date 
 import pandas as pd
 from config import CURRENCY_SYMBOLS, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TRANSACTION_TYPES
-from modules.analytics import calculate_kpis
+from modules.analytics import calculate_kpis,get_category_summary
 from database.db_manager import init_db,add_transaction, load_transactions_df,delete_transaction,preload_seed_data,update_transaction 
 
 st.set_page_config(
@@ -97,3 +97,6 @@ if edit_id:
             del st.session_state["msg"] 
     else:
         st.warning(f'No transaction found with #{edit_id}')
+summary=get_category_summary(df)
+st.subheader('Category Breakdown')
+st.dataframe(summary,use_container_width=True,hide_index=True)

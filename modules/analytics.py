@@ -25,4 +25,11 @@ def calculate_kpis(df):
         "total_expenses": total_expenses,
         "net_savings": net_savings,
         "savings_rate": savings_rate,
-    }
+    }
+def get_category_summary(df):
+    expenses=df[df['type']=='Expense']
+    summary=expenses.groupby('category')['amount'].sum().reset_index()
+    summary=summary.sort_values('amount',ascending=False)
+    grand_total=summary['amount'].sum()
+    summary['percentage']=(summary['amount']/grand_total *100)
+    return summary
