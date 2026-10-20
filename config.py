@@ -22,3 +22,16 @@ INCOME_CATEGORIES =['Freelance',
                     'Other Income',]
 #Transaction Categories
 TRANSACTION_TYPES =['Expense','Income']
+
+#Default budget
+DEFAULT_BUDGETS = {
+    "Food & Dining": 5000,
+    "Groceries": 4000,
+    "Transport": 2000,
+    "Shopping": 3000,
+    "Entertainment": 1500,
+    "Utilities": 2500,
+    "Rent & Housing": 15000,
+    "Health & Fitness": 2000,
+    "Education": 5000,
+}

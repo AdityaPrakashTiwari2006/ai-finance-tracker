@@ -14,6 +14,7 @@ def create_transaction(date,amount,category,txtype,note=" "):
     return transaction
 
 if __name__ == "__main__":
+    
     print(format_amount(350))
     print(format_amount(40000))
     print(format_amount(5000))
