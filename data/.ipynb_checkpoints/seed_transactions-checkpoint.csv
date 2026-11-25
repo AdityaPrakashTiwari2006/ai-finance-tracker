@@ -1,0 +1,51 @@
+date,amount,category,type,note
+2026-08-01,45000,Salary,Income,August salary
+2026-08-01,12000,Rent & Housing,Expense,Monthly rent
+2026-08-02,350,Food & Dining,Expense,Swiggy biryani
+2026-08-02,50,Transport,Expense,Metro to office
+2026-08-03,420,Groceries,Expense,Zepto vegetables
+2026-08-03,199,Entertainment,Expense,Netflix monthly
+2026-08-04,150,Food & Dining,Expense,Chai and samosa
+2026-08-04,89,Transport,Expense,Ola auto
+2026-08-05,2500,Utilities,Expense,Electricity bill
+2026-08-05,800,Shopping,Expense,Amazon phone cover
+2026-08-06,250,Food & Dining,Expense,Zomato lunch
+2026-08-07,60,Transport,Expense,Bus pass
+2026-08-08,499,Entertainment,Expense,Spotify annual
+2026-08-08,350,Groceries,Expense,BigBasket order
+2026-08-09,1200,Health & Fitness,Expense,Gym monthly
+2026-08-09,180,Food & Dining,Expense,Street food
+2026-08-10,5000,Education,Expense,Udemy course
+2026-08-10,40,Transport,Expense,Metro single trip
+2026-08-11,700,Shopping,Expense,Myntra t-shirt
+2026-08-11,300,Food & Dining,Expense,Dominos pizza
+2026-08-12,150,Groceries,Expense,Milk and bread
+2026-08-13,90,Food & Dining,Expense,Tea and biscuits
+2026-08-14,200,Transport,Expense,Uber ride
+2026-08-15,3000,Other Income,Income,Freelance payment
+2026-08-15,1500,Shopping,Expense,Flipkart headphones
+2026-08-16,250,Food & Dining,Expense,Swiggy dinner
+2026-08-17,100,Transport,Expense,Auto rickshaw
+2026-08-17,600,Groceries,Expense,Weekly vegetables
+2026-08-18,350,Entertainment,Expense,Movie tickets
+2026-08-19,450,Food & Dining,Expense,Restaurant dinner
+2026-08-20,1000,Utilities,Expense,WiFi bill
+2026-08-20,75,Food & Dining,Expense,Cutting chai
+2026-08-21,160,Transport,Expense,Rapido bike
+2026-08-22,500,Health & Fitness,Expense,Medicines
+2026-08-23,280,Groceries,Expense,Fruits and snacks
+2026-08-24,1800,Shopping,Expense,Shoes online
+2026-08-25,45000,Salary,Income,August salary part 2
+2026-08-25,130,Food & Dining,Expense,Maggi and juice
+2026-08-26,70,Transport,Expense,Metro recharge
+2026-08-27,950,Utilities,Expense,Mobile recharge
+2026-08-28,220,Food & Dining,Expense,Biryani takeaway
+2026-08-29,400,Groceries,Expense,Monthly groceries
+2026-08-30,199,Entertainment,Expense,Netflix monthly
+2026-08-30,300,Food & Dining,Expense,Pizza night
+2026-08-31,2000,Shopping,Expense,Gift for friend
+2026-09-01,45000,Salary,Income,September salary
+2026-09-01,12000,Rent & Housing,Expense,September rent
+2026-09-02,280,Food & Dining,Expense,Swiggy lunch
+2026-09-02,50,Transport,Expense,Metro pass
+2026-09-03,199,Entertainment,Expense,Netflix monthly

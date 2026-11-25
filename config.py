@@ -1,29 +1,32 @@
-#currency symbols
-CURRENCY_SYMBOLS='₹'
-CURRENCY_CODE='INR'
+"""
+Central configuration for the AI Finance Tracker & Decision-Support System.
+"""
 
-#Expense categories
-EXPENSE_CATEGORIES =['Food & Dining',
-                     'Transport',
-                     'Utilities',
-                     'Groceries',
-                     'Shopping',
-                     'Health & Fitness',
-                     'Rent & Housing',
-                     'Education',
-                     'Other',
-                     
-                      
-                     ]
-#Income categories
-INCOME_CATEGORIES =['Freelance',
-                    'Salary',
-                    'Investments',
-                    'Other Income',]
-#Transaction Categories
-TRANSACTION_TYPES =['Expense','Income']
+CURRENCY_SYMBOLS = "₹"
+CURRENCY_CODE = "INR"
 
-#Default budget
+EXPENSE_CATEGORIES = [
+    "Food & Dining",
+    "Groceries",
+    "Rent & Housing",
+    "Utilities",
+    "Transport",
+    "Shopping",
+    "Entertainment",
+    "Health & Fitness",
+    "Education",
+    "Other",
+]
+
+INCOME_CATEGORIES = [
+    "Salary",
+    "Freelance",
+    "Investments",
+    "Other Income",
+]
+
+TRANSACTION_TYPES = ["Expense", "Income"]
+
 DEFAULT_BUDGETS = {
     "Food & Dining": 5000,
     "Groceries": 4000,
