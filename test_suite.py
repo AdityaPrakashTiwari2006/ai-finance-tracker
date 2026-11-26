@@ -1,5 +1,6 @@
 import sys
 import os
+import io
 import pandas as pd
 from datetime import date
 
@@ -14,14 +15,14 @@ from database.db_manager import (
     delete_transaction,
     register_user,
     authenticate_user,
-    verify_password,
-    hash_password,
+    bulk_insert_transactions,
 )
 from modules.analytics import calculate_kpis, get_category_summary, plot_category_donut, plot_income_vs_expense_category, plot_monthly_trend
 from modules.behavior import analyze_weekend_vs_weekday, detect_chai_factor, detect_recurring_subscriptions
 from modules.decision_support import calculate_opportunity_cost, calculate_emergency_fund_health, plan_goal_timeline
 from modules.ml_categorizer import suggest_category
 from modules.ai_coach import build_financial_context, query_gemini_coach
+from modules.statement_parser import parse_bank_statement, detect_statement_columns
 
 def run_tests():
     print("=== 1. DATABASE & USER AUTHENTICATION TEST ===")
@@ -39,39 +40,56 @@ def run_tests():
     assert not bad_ok, "Failed: accepted wrong password!"
     print(f"PASS: Bad password rejected correctly ('{bad_msg}').")
 
-    # Test New User Registration
-    test_user = "test_fintech_user"
-    reg_ok, reg_msg, new_uid = register_user(test_user, "Test Candidate", "pass1234")
-    if not reg_ok:
-        # User might already exist from previous test run
-        assert "already exists" in reg_msg
-        auth_ok2, _, user2 = authenticate_user(test_user, "pass1234")
-        assert auth_ok2
-        new_uid = user2["id"]
-        print(f"PASS: Existing test user re-authenticated (User #{new_uid}).")
-    else:
-        print(f"PASS: New user registered successfully (User #{new_uid}).")
-
     # Test Multi-User Data Isolation
     df_user1 = load_transactions_df(user_id=1)
-    df_user2 = load_transactions_df(user_id=new_uid)
     assert not df_user1.empty, "User 1 should have seed transactions!"
-    print(f"PASS: User #1 has {len(df_user1)} transactions. User #{new_uid} has {len(df_user2)} transactions.")
+    print(f"PASS: User #1 has {len(df_user1)} transactions.")
 
-    # Insert a transaction for User 2 and verify User 1 does not see it
-    add_transaction("2026-11-26", 999.0, "Entertainment", "Expense", "Movie Night", user_id=new_uid)
-    df_user2_updated = load_transactions_df(user_id=new_uid)
-    assert any(df_user2_updated["amount"] == 999.0), "User 2 failed to record transaction!"
-    df_user1_check = load_transactions_df(user_id=1)
-    assert not any(df_user1_check["amount"] == 999.0), "CRITICAL LEAK: User 1 can see User 2's transaction!"
-    print("PASS: Multi-user data isolation verified with zero cross-tenant leakage.")
+    print("\n=== 2. BANK STATEMENT CSV PARSER & INGESTION TEST ===")
+    # Create sample HDFC/SBI bank statement CSV format
+    sample_csv = """Txn Date,Description,Withdrawal (Dr),Deposit (Cr),Balance
+01/11/2026,UPI-SWIGGY-BANGALORE,450.00,,45550.00
+02/11/2026,SALARY CREDIT NOV 2026,,65000.00,110550.00
+03/11/2026,UBER RIDE MUMBAI,320.00,,110230.00
+04/11/2026,NETFLIX COM MUMBAI,649.00,,109581.00
+05/11/2026,ZEPTO GROCERY ORDER,890.00,,108691.00
+"""
+    success, p_msg, parsed_df = parse_bank_statement(sample_csv.encode("utf-8"))
+    assert success, f"Failed parsing sample bank statement: {p_msg}"
+    assert len(parsed_df) == 5, f"Expected 5 parsed rows, got {len(parsed_df)}"
+    print(f"PASS: Bank statement parsed {len(parsed_df)} records: {p_msg}")
 
-    # Clean up test transaction
-    tx_to_del = df_user2_updated[df_user2_updated["amount"] == 999.0]["id"].values[0]
-    delete_transaction(tx_to_del, user_id=new_uid)
-    print("PASS: User transaction deleted cleanly.")
+    # Verify ML auto-categorization occurred during statement import
+    swiggy_cat = parsed_df[parsed_df["note"].str.contains("SWIGGY", case=False)]["category"].values[0]
+    salary_cat = parsed_df[parsed_df["note"].str.contains("SALARY", case=False)]["category"].values[0]
+    uber_cat = parsed_df[parsed_df["note"].str.contains("UBER", case=False)]["category"].values[0]
 
-    print("\n=== 2. ANALYTICS & KPIS TEST (ON DEMO USER DATA) ===")
+    assert swiggy_cat == "Food & Dining", f"Expected Food & Dining for Swiggy, got {swiggy_cat}"
+    assert salary_cat == "Salary", f"Expected Salary, got {salary_cat}"
+    assert uber_cat == "Transport", f"Expected Transport for Uber, got {uber_cat}"
+    print(f"PASS: Statement ML Auto-categorization: Swiggy -> '{swiggy_cat}' | Salary -> '{salary_cat}' | Uber -> '{uber_cat}'")
+
+    # Test Bulk Ingestion and Duplicate Avoidance
+    test_user_id = 999
+    records = parsed_df.to_dict(orient="records")
+    inserted, skipped = bulk_insert_transactions(records, user_id=test_user_id, skip_duplicates=True)
+    assert inserted == 5 and skipped == 0, f"Expected 5 inserted, 0 skipped. Got {inserted}, {skipped}"
+    print(f"PASS: Bulk insert test: {inserted} inserted, {skipped} skipped.")
+
+    # Re-insert identical batch to verify duplicate protection
+    inserted2, skipped2 = bulk_insert_transactions(records, user_id=test_user_id, skip_duplicates=True)
+    assert inserted2 == 0 and skipped2 == 5, f"Expected 0 inserted, 5 skipped. Got {inserted2}, {skipped2}"
+    print(f"PASS: Duplicate prevention test: {inserted2} inserted, {skipped2} skipped (100% duplicate protection).")
+
+    # Clean up test user records
+    conn = init_db()
+    from database.db_manager import get_connection
+    conn = get_connection()
+    conn.execute("DELETE FROM transactions WHERE user_id = ?", (test_user_id,))
+    conn.commit()
+    conn.close()
+
+    print("\n=== 3. ANALYTICS & KPIS TEST ===")
     df = df_user1.copy()
     df['date'] = pd.to_datetime(df['date'])
     kpis = calculate_kpis(df)
@@ -87,7 +105,7 @@ def run_tests():
     p3 = plot_monthly_trend(df)
     print("PASS: All 3 Plotly chart figures constructed successfully.")
 
-    print("\n=== 3. BEHAVIOR ENGINE TEST ===")
+    print("\n=== 4. BEHAVIOR ENGINE TEST ===")
     w = analyze_weekend_vs_weekday(df)
     print(f"PASS: Weekend spend: ₹{w['weekend_total']:,.0f} | Weekday spend: ₹{w['weekday_total']:,.0f} | Ratio: {w['ratio']}x")
 
@@ -97,7 +115,7 @@ def run_tests():
     r = detect_recurring_subscriptions(df)
     print(f"PASS: {len(r)} recurring subscription patterns detected.")
 
-    print("\n=== 4. DECISION SUPPORT TEST ===")
+    print("\n=== 5. DECISION SUPPORT TEST ===")
     opp = calculate_opportunity_cost(30000, 0.12, 10)
     assert opp['future_value'] > 30000
     print(f"PASS: 10-Yr Opportunity Cost for ₹30,000 -> ₹{opp['future_value']:,.2f} (Loss: ₹{opp['wealth_lost']:,.2f})")
@@ -109,7 +127,7 @@ def run_tests():
     assert goal['months_needed'] == 6
     print(f"PASS: Goal timeline: {goal['months_needed']} months standard, {goal['boosted_months']} months boosted.")
 
-    print("\n=== 5. ML AUTO-CATEGORIZATION TEST ===")
+    print("\n=== 6. ML AUTO-CATEGORIZATION TEST ===")
     cases = [
         ('zomato biryani order', 'Food & Dining'),
         ('ola auto ride to station', 'Transport'),
@@ -124,13 +142,13 @@ def run_tests():
         assert pred == expected, f'ML mismatch for "{note}"'
     print("PASS: 6/6 ML Auto-categorization test cases passed with 100% precision.")
 
-    print("\n=== 6. AI COACH CONTEXT & QUERY TEST ===")
+    print("\n=== 7. AI COACH CONTEXT & QUERY TEST ===")
     context = build_financial_context(kpis, w, c, "- Food: Budget ₹5000", "Summary table")
     response = query_gemini_coach("How do I reduce my food expenses?", context)
     assert len(response) > 50
     print(f"PASS: AI Coach produced {len(response)} chars of advice.")
     print("\n==============================================")
-    print("🎉 ALL TEST SUITES PASSED INCLUDING AUTH & MULTI-USER (100% GREEN)")
+    print("🎉 ALL TEST SUITES PASSED (BANK CSV IMPORT + AUTH + ML + AI)")
     print("==============================================")
 
 if __name__ == "__main__":

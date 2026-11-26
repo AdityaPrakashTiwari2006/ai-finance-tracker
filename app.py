@@ -18,6 +18,7 @@ from database.db_manager import (
     update_transaction,
     register_user,
     authenticate_user,
+    bulk_insert_transactions,
 )
 from modules.analytics import (
     calculate_kpis,
@@ -38,6 +39,7 @@ from modules.decision_support import (
 )
 from modules.ml_categorizer import suggest_category
 from modules.ai_coach import build_financial_context, query_gemini_coach
+from modules.statement_parser import parse_bank_statement
 
 # Page Setup
 st.set_page_config(
@@ -165,8 +167,9 @@ if not df.empty:
     st.markdown("---")
 
 # ----------------- MAIN NAVIGATION TABS -----------------
-tab_tx, tab_analytics, tab_behavior, tab_decision, tab_ai = st.tabs([
+tab_tx, tab_import, tab_analytics, tab_behavior, tab_decision, tab_ai = st.tabs([
     "📥 Transactions",
+    "📄 Import Statement",
     "📊 Analytics & Guardrails",
     "🧠 Behavioral Insights",
     "🎯 Decision Support",
@@ -215,7 +218,7 @@ with tab_tx:
     with col_data:
         st.subheader("Your Transaction History")
         if df.empty:
-            st.info("No transactions logged yet. Add your first record on the left! 👈")
+            st.info("No transactions logged yet. Add your first record on the left or import a CSV statement! 👈")
         else:
             display_df = df.copy()
             display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
@@ -264,7 +267,49 @@ with tab_tx:
         del st.session_state["edit_msg"]
 
 
-# ==================== TAB 2: ANALYTICS & GUARDRAILS ====================
+# ==================== TAB 2: BANK STATEMENT CSV IMPORT ====================
+with tab_import:
+    st.subheader("📄 Import Bank Statement (CSV)")
+    st.caption("Upload raw statements exported from HDFC, SBI, ICICI, Axis, Paytm, or any UPI/bank app.")
+
+    st.markdown("""
+    **Supported Columns:** Auto-detects Date, Narration/Description, Withdrawals/Debits, Deposits/Credits, or Net Amount.
+    All transactions are automatically classified using the built-in **ML TF-IDF Model**!
+    """)
+
+    uploaded_file = st.file_uploader("Upload Bank Statement (.csv)", type=["csv"], key="bank_csv_uploader")
+
+    if uploaded_file is not None:
+        file_bytes = uploaded_file.read()
+        success, parse_msg, parsed_df = parse_bank_statement(file_bytes)
+
+        if not success:
+            st.error(f"❌ {parse_msg}")
+        else:
+            st.success(f"✅ {parse_msg}")
+
+            st.write("### 🔍 Preview Parsed Transactions (with ML Auto-Categorization)")
+            st.dataframe(parsed_df, width="stretch", hide_index=True)
+
+            p_summary1, p_summary2, p_summary3 = st.columns(3)
+            tot_exp = parsed_df[parsed_df["type"] == "Expense"]["amount"].sum()
+            tot_inc = parsed_df[parsed_df["type"] == "Income"]["amount"].sum()
+            p_summary1.metric("Transactions Found", len(parsed_df))
+            p_summary2.metric("Total Expenses Detected", f"{CURRENCY_SYMBOLS}{tot_exp:,.2f}")
+            p_summary3.metric("Total Income Detected", f"{CURRENCY_SYMBOLS}{tot_inc:,.2f}")
+
+            skip_dups = st.checkbox("🛡️ Skip duplicate transactions (checks existing dates, amounts, and notes)", value=True)
+
+            if st.button("📥 Import All Transactions into Database", type="primary", use_container_width=True):
+                records = parsed_df.to_dict(orient="records")
+                inserted, skipped = bulk_insert_transactions(records, user_id=current_user_id, skip_duplicates=skip_dups)
+                
+                st.success(f"🎉 Import Complete! Inserted **{inserted}** transactions ({skipped} skipped as duplicates).")
+                st.balloons()
+                st.rerun()
+
+
+# ==================== TAB 3: ANALYTICS & GUARDRAILS ====================
 with tab_analytics:
     st.subheader(f"📊 Spending Analytics & Budget Guardrails ({time_filter})")
 
@@ -301,7 +346,7 @@ with tab_analytics:
     st.plotly_chart(plot_monthly_trend(df), width="stretch")
 
 
-# ==================== TAB 3: BEHAVIORAL INSIGHTS ====================
+# ==================== TAB 4: BEHAVIORAL INSIGHTS ====================
 with tab_behavior:
     st.subheader("🧠 Behavioral Intelligence & Money Leak Detection")
     st.caption("Identifies psychological spending patterns, micro-leaks, and hidden subscription commitments.")
@@ -355,7 +400,7 @@ with tab_behavior:
         )
 
 
-# ==================== TAB 4: DECISION SUPPORT ====================
+# ==================== TAB 5: DECISION SUPPORT ====================
 with tab_decision:
     st.subheader("🎯 Mathematical Financial Decision Support")
     st.caption("Simulate big purchases, emergency fund runways, and target goal timelines before spending.")
@@ -418,7 +463,7 @@ with tab_decision:
     st.success(goal_plan["status"])
 
 
-# ==================== TAB 5: CHANAKYA AI FINANCIAL COACH ====================
+# ==================== TAB 6: CHANAKYA AI FINANCIAL COACH ====================
 with tab_ai:
     st.subheader("🤖 Chanakya AI Financial Coach")
     st.caption("AI reasoning powered by Google Gemini with your live transaction context injected.")

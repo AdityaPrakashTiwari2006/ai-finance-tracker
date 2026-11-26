@@ -3,6 +3,7 @@ database/db_manager.py
 Database layer for AI Finance Tracker:
 - Multi-user authentication (Registration, Secure SHA-256 Passwords with Salt, Login)
 - User-isolated Transaction CRUD operations
+- Bulk statement import with duplicate avoidance
 - Backward-compatible schema migration (adds user_id column and users table)
 """
 
@@ -132,7 +133,7 @@ def authenticate_user(username: str, password: str) -> tuple[bool, str, dict | N
 # ----------------- USER-ISOLATED TRANSACTION CRUD -----------------
 
 def add_transaction(date, amount, category, tx_type, note, user_id=1):
-    """Inserts a transaction tied to a specific user_id."""
+    """Inserts a single transaction tied to a specific user_id."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -141,6 +142,60 @@ def add_transaction(date, amount, category, tx_type, note, user_id=1):
     )
     conn.commit()
     conn.close()
+
+
+def bulk_insert_transactions(records: list[dict], user_id: int, skip_duplicates: bool = True) -> tuple[int, int]:
+    """
+    Inserts a batch of parsed transactions for a user.
+    Returns (inserted_count, skipped_count).
+    """
+    if not records:
+        return 0, 0
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    existing_set = set()
+    if skip_duplicates:
+        cursor.execute("SELECT date, amount, type, note FROM transactions WHERE user_id = ?", (user_id,))
+        for r in cursor.fetchall():
+            # normalize for fuzzy duplicate match
+            d, a, t, n = r
+            existing_set.add((str(d).strip(), float(a), str(t).strip(), str(n or "").strip().lower()))
+
+    to_insert = []
+    skipped = 0
+
+    for item in records:
+        key = (
+            str(item["date"]).strip(),
+            float(item["amount"]),
+            str(item["type"]).strip(),
+            str(item.get("note", "") or "").strip().lower(),
+        )
+        if skip_duplicates and key in existing_set:
+            skipped += 1
+            continue
+
+        to_insert.append((
+            str(item["date"]),
+            float(item["amount"]),
+            str(item["category"]),
+            str(item["type"]),
+            str(item.get("note", "")),
+            int(user_id),
+        ))
+        existing_set.add(key)
+
+    if to_insert:
+        cursor.executemany(
+            """INSERT INTO transactions(date, amount, category, type, note, user_id) VALUES (?,?,?,?,?,?)""",
+            to_insert,
+        )
+        conn.commit()
+
+    conn.close()
+    return len(to_insert), skipped
 
 
 def load_transactions_df(user_id=None):
