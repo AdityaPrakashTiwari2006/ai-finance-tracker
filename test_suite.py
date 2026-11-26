@@ -6,7 +6,17 @@ from datetime import date
 # Set UTF-8 encoding for standard output
 sys.stdout.reconfigure(encoding='utf-8')
 
-from database.db_manager import init_db, preload_seed_data, load_transactions_df, add_transaction, delete_transaction
+from database.db_manager import (
+    init_db,
+    preload_seed_data,
+    load_transactions_df,
+    add_transaction,
+    delete_transaction,
+    register_user,
+    authenticate_user,
+    verify_password,
+    hash_password,
+)
 from modules.analytics import calculate_kpis, get_category_summary, plot_category_donut, plot_income_vs_expense_category, plot_monthly_trend
 from modules.behavior import analyze_weekend_vs_weekday, detect_chai_factor, detect_recurring_subscriptions
 from modules.decision_support import calculate_opportunity_cost, calculate_emergency_fund_health, plan_goal_timeline
@@ -14,14 +24,55 @@ from modules.ml_categorizer import suggest_category
 from modules.ai_coach import build_financial_context, query_gemini_coach
 
 def run_tests():
-    print("=== 1. DATABASE & PRELOAD TEST ===")
+    print("=== 1. DATABASE & USER AUTHENTICATION TEST ===")
     init_db()
     preload_seed_data()
-    df = load_transactions_df()
-    assert not df.empty, "Database is empty!"
-    print(f"PASS: {len(df)} transactions in database.")
 
-    print("\n=== 2. ANALYTICS & KPIS TEST ===")
+    # Test Default Demo Login
+    auth_ok, msg, user = authenticate_user("aditya", "demo123")
+    assert auth_ok, f"Demo login failed: {msg}"
+    assert user["username"] == "aditya"
+    print(f"PASS: Demo user authenticated successfully (User #{user['id']}: {user['name']}).")
+
+    # Test Bad Password
+    bad_ok, bad_msg, _ = authenticate_user("aditya", "wrongpassword")
+    assert not bad_ok, "Failed: accepted wrong password!"
+    print(f"PASS: Bad password rejected correctly ('{bad_msg}').")
+
+    # Test New User Registration
+    test_user = "test_fintech_user"
+    reg_ok, reg_msg, new_uid = register_user(test_user, "Test Candidate", "pass1234")
+    if not reg_ok:
+        # User might already exist from previous test run
+        assert "already exists" in reg_msg
+        auth_ok2, _, user2 = authenticate_user(test_user, "pass1234")
+        assert auth_ok2
+        new_uid = user2["id"]
+        print(f"PASS: Existing test user re-authenticated (User #{new_uid}).")
+    else:
+        print(f"PASS: New user registered successfully (User #{new_uid}).")
+
+    # Test Multi-User Data Isolation
+    df_user1 = load_transactions_df(user_id=1)
+    df_user2 = load_transactions_df(user_id=new_uid)
+    assert not df_user1.empty, "User 1 should have seed transactions!"
+    print(f"PASS: User #1 has {len(df_user1)} transactions. User #{new_uid} has {len(df_user2)} transactions.")
+
+    # Insert a transaction for User 2 and verify User 1 does not see it
+    add_transaction("2026-11-26", 999.0, "Entertainment", "Expense", "Movie Night", user_id=new_uid)
+    df_user2_updated = load_transactions_df(user_id=new_uid)
+    assert any(df_user2_updated["amount"] == 999.0), "User 2 failed to record transaction!"
+    df_user1_check = load_transactions_df(user_id=1)
+    assert not any(df_user1_check["amount"] == 999.0), "CRITICAL LEAK: User 1 can see User 2's transaction!"
+    print("PASS: Multi-user data isolation verified with zero cross-tenant leakage.")
+
+    # Clean up test transaction
+    tx_to_del = df_user2_updated[df_user2_updated["amount"] == 999.0]["id"].values[0]
+    delete_transaction(tx_to_del, user_id=new_uid)
+    print("PASS: User transaction deleted cleanly.")
+
+    print("\n=== 2. ANALYTICS & KPIS TEST (ON DEMO USER DATA) ===")
+    df = df_user1.copy()
     df['date'] = pd.to_datetime(df['date'])
     kpis = calculate_kpis(df)
     assert 'total_income' in kpis and 'total_expenses' in kpis
@@ -79,7 +130,7 @@ def run_tests():
     assert len(response) > 50
     print(f"PASS: AI Coach produced {len(response)} chars of advice.")
     print("\n==============================================")
-    print("🎉 ALL TEST SUITES PASSED (100% GREEN)")
+    print("🎉 ALL TEST SUITES PASSED INCLUDING AUTH & MULTI-USER (100% GREEN)")
     print("==============================================")
 
 if __name__ == "__main__":

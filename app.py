@@ -16,6 +16,8 @@ from database.db_manager import (
     delete_transaction,
     preload_seed_data,
     update_transaction,
+    register_user,
+    authenticate_user,
 )
 from modules.analytics import (
     calculate_kpis,
@@ -39,25 +41,84 @@ from modules.ai_coach import build_financial_context, query_gemini_coach
 
 # Page Setup
 st.set_page_config(
-    page_title="AI Finance Tracker & Decision Engine",
+    page_title="FinTrack AI — Personal Finance Decision Engine",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Initialize database and seed records
+# Initialize database schema and demo seed
 init_db()
 preload_seed_data()
 
-# Load main dataframe & normalize date
-df = load_transactions_df()
+# ----------------- SESSION STATE AUTHENTICATION CHECK -----------------
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+    st.session_state["user"] = None
+
+# If user is not logged in, render the Login / Sign-up portal
+if not st.session_state["authenticated"]:
+    col_center = st.columns([1, 2, 1])[1]
+    with col_center:
+        st.title("💰 FinTrack AI")
+        st.subheader("Sign In or Register")
+        st.caption("Personal Finance & Behavioral Decision-Support System")
+
+        auth_tab_login, auth_tab_reg = st.tabs(["🔐 Sign In", "📝 Create Account"])
+
+        with auth_tab_login:
+            with st.form("login_form"):
+                l_user = st.text_input("Username", placeholder="e.g. aditya")
+                l_pwd = st.text_input("Password", type="password")
+                l_btn = st.form_submit_button("Sign In 🚀", use_container_width=True)
+
+                if l_btn:
+                    success, msg, user_dict = authenticate_user(l_user, l_pwd)
+                    if success:
+                        st.session_state["authenticated"] = True
+                        st.session_state["user"] = user_dict
+                        st.success(f"Welcome back, {user_dict['name']}!")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+            st.info("💡 **Demo Credentials:** Username: `aditya` | Password: `demo123`")
+
+        with auth_tab_reg:
+            with st.form("register_form"):
+                r_name = st.text_input("Full Name", placeholder="e.g. Rahul Sharma")
+                r_user = st.text_input("Choose Username", placeholder="e.g. rahul")
+                r_pwd = st.text_input("Choose Password", type="password")
+                r_btn = st.form_submit_button("Register ✍️", use_container_width=True)
+
+                if r_btn:
+                    success, msg, new_uid = register_user(r_user, r_name, r_pwd)
+                    if success:
+                        st.success(f"{msg} You can now log in above with username '{r_user}'.")
+                    else:
+                        st.error(msg)
+
+    st.stop()  # Halt execution until authenticated
+
+# ==================== AUTHENTICATED USER SESSION ====================
+current_user = st.session_state["user"]
+current_user_id = current_user["id"]
+
+# Load user-isolated transactions
+df = load_transactions_df(user_id=current_user_id)
 if not df.empty:
     df["date"] = pd.to_datetime(df["date"])
 
-# ----------------- SIDEBAR: Time Filter & Fast Stats -----------------
+# ----------------- SIDEBAR: User Info, Logout & Time Filter -----------------
 with st.sidebar:
     st.title("💰 FinTrack AI")
-    st.caption("Personal Finance Decision-Support System")
+    st.markdown(f"👤 Logged in as: **{current_user['name']}** (`@{current_user['username']}`)")
+
+    if st.button("🚪 Sign Out", type="secondary"):
+        st.session_state["authenticated"] = False
+        st.session_state["user"] = None
+        st.rerun()
+
     st.markdown("---")
 
     time_filter = st.selectbox(
@@ -92,7 +153,7 @@ with st.sidebar:
     st.caption("BCA Final Capstone Project\nDesigned with Python, SQLite, Pandas, Scikit-Learn & Gemini API")
 
 # ----------------- TOP KPI BAR -----------------
-st.title("Personal Finance & Behavioral Decision Engine")
+st.title(f"Welcome back, {current_user['name'].split()[0]}! 👋")
 
 if not df.empty:
     kpis = calculate_kpis(filtered_df)
@@ -143,7 +204,7 @@ with tab_tx:
             submitted = st.form_submit_button(f"🗳️ Save {tx_type}")
 
             if submitted:
-                add_transaction(tx_date, tx_amount, tx_category, tx_type, tx_note)
+                add_transaction(tx_date, tx_amount, tx_category, tx_type, tx_note, user_id=current_user_id)
                 st.session_state["saved_msg"] = f"✅ {tx_type} of {CURRENCY_SYMBOLS}{tx_amount:,.2f} recorded!"
                 st.rerun()
 
@@ -152,7 +213,7 @@ with tab_tx:
         del st.session_state["saved_msg"]
 
     with col_data:
-        st.subheader("Transaction History")
+        st.subheader("Your Transaction History")
         if df.empty:
             st.info("No transactions logged yet. Add your first record on the left! 👈")
         else:
@@ -172,7 +233,7 @@ with tab_tx:
                 st.write("")
                 st.write("")
                 if st.button("🗑️ Delete", type="secondary"):
-                    delete_transaction(int(del_id))
+                    delete_transaction(int(del_id), user_id=current_user_id)
                     st.warning(f"Deleted Transaction #{int(del_id)}")
                     st.rerun()
 
@@ -192,7 +253,7 @@ with tab_tx:
                     e_amount = st.number_input(f"Amount ({CURRENCY_SYMBOLS})", min_value=0.01, value=float(row["amount"]))
                     e_note = st.text_input("Note", value=str(row["note"]))
                     if st.form_submit_button("Update Transaction"):
-                        update_transaction(edit_id, e_date, e_amount, e_cat, e_type, e_note)
+                        update_transaction(edit_id, e_date, e_amount, e_cat, e_type, e_note, user_id=current_user_id)
                         st.session_state["edit_msg"] = f"Transaction #{edit_id} updated!"
                         st.rerun()
             else:
@@ -392,7 +453,7 @@ with tab_ai:
     # Chat history in session state
     if "chat_messages" not in st.session_state:
         st.session_state["chat_messages"] = [
-            {"role": "assistant", "content": "Namaste! I am Chanakya, your AI Financial Coach. Ask me anything about your spending habits, budget leaks, or savings goals!"}
+            {"role": "assistant", "content": f"Namaste {current_user['name'].split()[0]}! I am Chanakya, your AI Financial Coach. Ask me anything about your spending habits, budget leaks, or savings goals!"}
         ]
 
     for msg in st.session_state["chat_messages"]:
