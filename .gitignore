@@ -2,5 +2,10 @@ venv/
 __pycache__/
 *.pyc
 .env
+*.env
 *.joblib
 .vscode/
+finance.db
+*.db
+*.sqlite3
+data/.ipynb_checkpoints/
